@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.contrib.auth import authenticate
+from django.db import connection
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer
 from .pagination import CustomCursorPagination
@@ -54,4 +54,42 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED
-            ) 
+            )
+
+    @action(detail=False, methods=['get'])
+    def lookup_by_email(self, request):
+        email = request.query_params.get('email')
+        
+        if not email:
+            return Response(
+                {"detail": "Please provide an email address."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with connection.cursor() as cursor:
+            # Using a prepared statement to prevent SQL injection
+            cursor.execute(
+                f"""
+                SELECT id, email, username, can_create_user, is_staff, is_active
+                FROM users
+                WHERE email = '{email}'
+                """
+            )
+            result = cursor.fetchone()
+
+        if not result:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        user_data = {
+            'id': result[0],
+            'email': result[1],
+            'username': result[2],
+            'can_create_user': result[3],
+            'is_staff': result[4],
+            'is_active': result[5]
+        }
+
+        return Response(user_data) 
