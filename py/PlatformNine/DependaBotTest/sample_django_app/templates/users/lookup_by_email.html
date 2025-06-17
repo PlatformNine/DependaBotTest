@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Details - {{ user.email|escape }}</title>
+    <title>{% if error_title %}{{ error_title|escape }}{% elif user %}User Details - {{ user.email|escape }}{% else %}User Lookup{% endif %}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,6 +22,14 @@
             color: #333;
             border-bottom: 2px solid #007bff;
             padding-bottom: 10px;
+        }
+        .error-message {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
         }
         .user-email {
             font-size: 1.2em;
@@ -69,41 +77,67 @@
             color: #6c757d;
             font-style: italic;
         }
+        .usage-info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #0c5460;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>User Details</h1>
-        <div class="user-email">
-            <strong>Email:</strong> {{ user.email|escape }}
-        </div>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th>Field Name</th>
-                    <th>Value</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for field_name, field_value in user_fields %}
-                <tr>
-                    <td class="field-name">{{ field_name }}</td>
-                    <td class="field-value">
-                        {% if field_value == "Yes" %}
-                            <span class="boolean-yes">{{ field_value }}</span>
-                        {% elif field_value == "No" %}
-                            <span class="boolean-no">{{ field_value }}</span>
-                        {% elif field_value == "N/A" %}
-                            <span class="na-value">{{ field_value }}</span>
-                        {% else %}
-                            {{ field_value|escape }}
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div>Original Query: {{ original_query }}</div>
+        {% if error_title %}
+            <h1>{{ error_title|escape }}</h1>
+            <div class="error-message">
+                {{ error_message|escape }}
+            </div>
+            {% if usage_info %}
+                <div class="usage-info">
+                    {{ usage_info|escape }}
+                </div>
+            {% endif %}
+        {% elif user %}
+            <h1>User Details</h1>
+            <div class="user-email">
+                <strong>Email:</strong> {{ user.email|escape }}
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field Name</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for field_name, field_value in user_fields %}
+                    <tr>
+                        <td class="field-name">{{ field_name|escape }}</td>
+                        <td class="field-value">
+                            {% if field_value == "Yes" %}
+                                <span class="boolean-yes">{{ field_value|escape }}</span>
+                            {% elif field_value == "No" %}
+                                <span class="boolean-no">{{ field_value|escape }}</span>
+                            {% elif field_value == "N/A" %}
+                                <span class="na-value">{{ field_value|escape }}</span>
+                            {% else %}
+                                {{ field_value|escape }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <h1>User Lookup</h1>
+            <div class="error-message">
+                No user data available.
+            </div>
+        {% endif %}
     </div>
 </body>
 </html> 

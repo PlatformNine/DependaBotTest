@@ -253,21 +253,20 @@ class UserViewSet(viewsets.ModelViewSet):
     def lookup_by_email_html_jinja(self, request):
         email = request.query_params.get('email')
         
+        # Set up Jinja2 environment
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
+        env = Environment(loader=FileSystemLoader(template_dir))
+        template = env.get_template('users/lookup_by_email.html')
+        
         if not email:
-            return HttpResponse(
-                """
-                <html>
-                <head><title>User Lookup Error</title></head>
-                <body>
-                    <h1>Error</h1>
-                    <p>Please provide an email address.</p>
-                    <p>Usage: /api/users/lookup_by_email_html_jinja/?email=user@example.com</p>
-                </body>
-                </html>
-                """,
-                content_type='text/html',
-                status=400
+            # Render error template for missing email
+            html_content = template.render(
+                error_title="User Lookup Error",
+                error_message="Please provide an email address.",
+                usage_info="Usage: /api/users/lookup_by_email_html_jinja/?email=user@example.com",
+                original_query=email,
             )
+            return HttpResponse(html_content, content_type='text/html', status=400)
 
         try:
             user = User.objects.get(email=email)
@@ -285,30 +284,20 @@ class UserViewSet(viewsets.ModelViewSet):
                     field_value = "N/A"
                 user_fields.append((field_name, str(field_value)))
             
-            # Set up Jinja2 environment
-            template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
-            env = Environment(loader=FileSystemLoader(template_dir))
-            template = env.get_template('users/lookup_by_email.html')
-            
-            # Render template with context
+            # Render template with user data
             html_content = template.render(
                 user=user,
-                user_fields=user_fields
+                user_fields=user_fields,
+                original_query=email,
             )
             
             return HttpResponse(html_content, content_type='text/html')
             
         except User.DoesNotExist:
-            return HttpResponse(
-                f"""
-                <html>
-                <head><title>User Not Found</title></head>
-                <body>
-                    <h1>User Not Found</h1>
-                    <p>No user found with email: {email}</p>
-                </body>
-                </html>
-                """,
-                content_type='text/html',
-                status=404
-            ) 
+            # Render error template for user not found
+            html_content = template.render(
+                error_title="User Not Found",
+                error_message=f"No user found with email: {email}",
+                original_query=email,
+            )
+            return HttpResponse(html_content, content_type='text/html', status=404) 
