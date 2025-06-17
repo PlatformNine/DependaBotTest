@@ -1,12 +1,20 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db import connection
+from django.contrib.auth import login, logout
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer
 from .pagination import CustomCursorPagination
+from rest_framework.authentication import SessionAuthentication
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # Disable CSRF check
 
 class UserViewSet(viewsets.ModelViewSet):
+    authentication_classes = (CsrfExemptSessionAuthentication,)
     queryset = User.objects.all()
     serializer_class = UserSerializer
     pagination_class = CustomCursorPagination
@@ -16,6 +24,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         if self.action == 'login':
             return [permissions.AllowAny()]
+        if self.action == 'session_status':
+            return [permissions.AllowAny()]  # Allow checking session status without auth
         return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -49,12 +59,42 @@ class UserViewSet(viewsets.ModelViewSet):
                     {"detail": "Invalid credentials."},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
-            return Response(UserSerializer(user).data)
+            
+            # Use Django's standard login function
+            login(request, user)
+            
+            response = Response({
+                "message": "Login successful",
+                "user": UserSerializer(user).data,
+                "session_id": request.session.session_key
+            })
+            
+            return response
         except User.DoesNotExist:
             return Response(
                 {"detail": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
+    @action(detail=False, methods=['post'])
+    def logout(self, request):
+        logout(request)
+        return Response({"message": "Logout successful"})
+
+    @action(detail=False, methods=['get'])
+    def session_status(self, request):
+        if request.user.is_authenticated:
+            return Response({
+                "authenticated": True,
+                "user": UserSerializer(request.user).data,
+                "session_id": request.session.session_key,
+                "session_expires_in": request.session.get_expiry_age()
+            })
+        else:
+            return Response({
+                "authenticated": False,
+                "message": "Not authenticated"
+            })
 
     @action(detail=False, methods=['get'])
     def lookup_by_email(self, request):
@@ -92,4 +132,4 @@ class UserViewSet(viewsets.ModelViewSet):
             'is_active': result[5]
         }
 
-        return Response(user_data) 
+        return Response({'user': user_data}) 

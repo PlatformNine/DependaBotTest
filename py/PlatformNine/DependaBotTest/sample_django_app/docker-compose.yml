@@ -8,6 +8,7 @@ services:
       - DJANGO_SECRET_KEY=your-secret-key-here
     depends_on:
       - db
+      - memcache
     volumes:
       - .:/app
 
@@ -21,6 +22,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  memcache:
+    image: memcached:1.6-alpine
+    command: memcached -m 128
 
 volumes:
   postgres_data: 

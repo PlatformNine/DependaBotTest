@@ -1,0 +1,25 @@
+include:
+  - docker-compose.yml
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/sample_django_app
+      - DJANGO_SECRET_KEY=your-secret-key-here
+      - MEMCACHE_URL=memcache://memcache:11211
+      - TEST_BASE_URL=http://web:8000/api
+    depends_on:
+      - web
+      - db
+      - memcache
+    working_dir: /usr/local/yoda/dependabottest/sample_django_app
+    command: >
+      sh -c "
+        uv sync --dev &&
+        uv run pytest test_session.py -v --tb=short
+      "
+    profiles:
+      - test 
