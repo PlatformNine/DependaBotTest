@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to demonstrate session-based authentication with memcache.
+Test script to demonstrate session-based authentication with memcache and CSRF protection.
 """
 
 import pytest
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 BASE_URL = URL(os.getenv("TEST_BASE_URL", "http://localhost:8000/api"))
 
 @pytest.fixture
-def session_cookies():
-    """Fixture to get authenticated session cookies."""
+def session_cookies_and_csrf():
+    """Fixture to get authenticated session cookies and CSRF token."""
     login_data = {
         "email": "admin@yodaexample.click",
         "password": "yoda"
@@ -29,11 +29,22 @@ def session_cookies():
     assert response.status_code == 200, f"Login failed: {response.text}"
     
     cookies = response.cookies
+    response_data = response.json()
+    csrf_token = response_data.get('csrf_token')
+    
     logger.info(f"Session cookies obtained: {dict(cookies)}")
+    logger.info(f"CSRF token obtained: {csrf_token}")
+    
+    return cookies, csrf_token
+
+@pytest.fixture
+def session_cookies(session_cookies_and_csrf):
+    """Fixture to get authenticated session cookies."""
+    cookies, _ = session_cookies_and_csrf
     return cookies
 
 def test_login_creates_session():
-    """Test that login creates a valid session."""
+    """Test that login creates a valid session and returns CSRF token."""
     login_data = {
         "email": "admin@yodaexample.click",
         "password": "yoda"
@@ -46,6 +57,8 @@ def test_login_creates_session():
     
     response_data = response.json()
     assert "message" in response_data, "No message in response"
+    assert "csrf_token" in response_data, "No CSRF token in response"
+    assert response_data["csrf_token"], "CSRF token should not be empty"
     logger.info(f"Login successful: {response_data}")
 
 def test_session_status_authenticated(session_cookies):
@@ -59,13 +72,15 @@ def test_session_status_authenticated(session_cookies):
     assert response_data["authenticated"] is True, "User should be authenticated"
     logger.info(f"Session status: {response_data}")
 
-def test_authenticated_endpoint_access(session_cookies):
-    """Test that authenticated endpoints work with valid session."""
+def test_authenticated_endpoint_access(session_cookies_and_csrf):
+    """Test that authenticated endpoints work with valid session and CSRF token."""
+    cookies, csrf_token = session_cookies_and_csrf
     email = "admin@yodaexample.click"
     url = BASE_URL / "users" / "lookup_by_email" / ""
     params = {"email": email}
     
-    response = requests.get(str(url), params=params, cookies=session_cookies)
+    headers = {'X-CSRFToken': csrf_token}
+    response = requests.get(str(url), params=params, cookies=cookies, headers=headers)
     
     assert response.status_code == 200, f"Authenticated endpoint access failed: {response.text}"
     
@@ -74,15 +89,18 @@ def test_authenticated_endpoint_access(session_cookies):
     assert response_data["user"]["email"] == email, "Email mismatch"
     logger.info(f"Authenticated endpoint access successful: {response_data}")
 
-def test_logout_clears_session(session_cookies):
+def test_logout_clears_session(session_cookies_and_csrf):
     """Test that logout properly clears the session."""
+    cookies, csrf_token = session_cookies_and_csrf
+    
     # First verify we're authenticated
-    response = requests.get(str(BASE_URL / "users" / "session_status" / ""), cookies=session_cookies)
+    response = requests.get(str(BASE_URL / "users" / "session_status" / ""), cookies=cookies)
     assert response.status_code == 200
     assert response.json()["authenticated"] is True
     
-    # Now logout
-    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=session_cookies)
+    # Now logout with CSRF token
+    headers = {'X-CSRFToken': csrf_token}
+    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies, headers=headers)
     assert response.status_code == 200, f"Logout failed: {response.text}"
     
     response_data = response.json()
@@ -90,7 +108,7 @@ def test_logout_clears_session(session_cookies):
     logger.info(f"Logout successful: {response_data}")
     
     # Verify session is cleared
-    response = requests.get(str(BASE_URL / "users" / "session_status" / ""), cookies=session_cookies)
+    response = requests.get(str(BASE_URL / "users" / "session_status" / ""), cookies=cookies)
     assert response.status_code == 200
     assert response.json()["authenticated"] is False, "Session should be cleared after logout"
 
@@ -108,8 +126,57 @@ def test_unauthorized_access_rejected():
     assert "detail" in response_data, "No error message in unauthorized response"
     logger.info(f"Unauthorized access properly rejected: {response_data}")
 
+def test_login_without_csrf():
+    """Test that login works without CSRF tokens."""
+    login_data = {
+        "email": "admin@yodaexample.click",
+        "password": "yoda"
+    }
+    
+    # Login should work without any CSRF headers
+    response = requests.post(str(BASE_URL / "users" / "login" / ""), json=login_data)
+    assert response.status_code == 200, f"Login should work without CSRF token: {response.text}"
+    
+    response_data = response.json()
+    assert "csrf_token" in response_data, "Login should return CSRF token for subsequent requests"
+    assert response_data["csrf_token"], "CSRF token should not be empty"
+    
+    logger.info("Login endpoint correctly exempt from CSRF protection")
+
+def test_csrf_protection():
+    """Test that CSRF protection is working correctly."""
+    # First login to get session cookies - should work without CSRF token
+    login_data = {
+        "email": "admin@yodaexample.click",
+        "password": "yoda"
+    }
+    
+    response = requests.post(str(BASE_URL / "users" / "login" / ""), json=login_data)
+    assert response.status_code == 200, f"Login failed: {response.text}"
+    
+    cookies = response.cookies
+    response_data = response.json()
+    csrf_token = response_data.get('csrf_token')
+    assert csrf_token, "CSRF token should be returned after login"
+    
+    # Try to logout without CSRF token - should fail
+    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies)
+    assert response.status_code == 403, f"Logout without CSRF token should return 403, got {response.status_code}"
+    
+    # Try to logout with invalid CSRF token - should fail
+    headers = {'X-CSRFToken': 'invalid_token'}
+    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies, headers=headers)
+    assert response.status_code == 403, f"Logout with invalid CSRF token should return 403, got {response.status_code}"
+    
+    # Try to logout with valid CSRF token - should succeed
+    headers = {'X-CSRFToken': csrf_token}
+    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies, headers=headers)
+    assert response.status_code == 200, f"Logout with valid CSRF token should succeed, got {response.status_code}"
+    
+    logger.info("CSRF protection working correctly - login exempt, other endpoints protected")
+
 def test_session_authentication_flow():
-    """Test the complete session authentication flow."""
+    """Test the complete session authentication flow with CSRF protection."""
     login_data = {
         "email": "admin@yodaexample.click",
         "password": "yoda"
@@ -120,7 +187,11 @@ def test_session_authentication_flow():
     assert response.status_code == 200, f"Login failed: {response.text}"
     
     cookies = response.cookies
+    response_data = response.json()
+    csrf_token = response_data.get('csrf_token')
+    
     assert cookies, "No session cookies returned"
+    assert csrf_token, "No CSRF token returned"
     logger.info("Step 1: Login successful")
     
     # Step 2: Check session status
@@ -129,18 +200,19 @@ def test_session_authentication_flow():
     assert response.json()["authenticated"] is True
     logger.info("Step 2: Session status confirmed")
     
-    # Step 3: Access protected endpoint
+    # Step 3: Access protected endpoint with CSRF token
     email = "admin@yodaexample.click"
     url = BASE_URL / "users" / "lookup_by_email" / ""
     params = {"email": email}
+    headers = {'X-CSRFToken': csrf_token}
     
-    response = requests.get(str(url), params=params, cookies=cookies)
+    response = requests.get(str(url), params=params, cookies=cookies, headers=headers)
     assert response.status_code == 200
     assert response.json()["user"]["email"] == email
     logger.info("Step 3: Protected endpoint accessed")
     
-    # Step 4: Logout
-    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies)
+    # Step 4: Logout with CSRF token
+    response = requests.post(str(BASE_URL / "users" / "logout" / ""), cookies=cookies, headers=headers)
     assert response.status_code == 200
     logger.info("Step 4: Logout successful")
     

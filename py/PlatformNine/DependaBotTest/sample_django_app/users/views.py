@@ -4,17 +4,23 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django.db import connection
 from django.contrib.auth import login, logout
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer
 from .pagination import CustomCursorPagination
 from rest_framework.authentication import SessionAuthentication
 
-class CsrfExemptSessionAuthentication(SessionAuthentication):
+class CsrfExemptLoginSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
-        return  # Disable CSRF check
+        # Exempt login endpoint from CSRF check
+        if request.path.endswith('/login/') and request.method == 'POST':
+            return  # Skip CSRF check for login
+        return super().enforce_csrf(request)
 
 class UserViewSet(viewsets.ModelViewSet):
-    authentication_classes = (CsrfExemptSessionAuthentication,)
+    authentication_classes = (CsrfExemptLoginSessionAuthentication,)
     queryset = User.objects.all()
     serializer_class = UserSerializer
     pagination_class = CustomCursorPagination
@@ -63,10 +69,14 @@ class UserViewSet(viewsets.ModelViewSet):
             # Use Django's standard login function
             login(request, user)
             
+            # Get CSRF token for subsequent requests
+            csrf_token = get_token(request)
+            
             response = Response({
                 "message": "Login successful",
                 "user": UserSerializer(user).data,
-                "session_id": request.session.session_key
+                "session_id": request.session.session_key,
+                "csrf_token": csrf_token
             })
             
             return response
@@ -107,7 +117,8 @@ class UserViewSet(viewsets.ModelViewSet):
             )
 
         with connection.cursor() as cursor:
-            # Using a prepared statement to prevent SQL injection
+            # SQL injection that we expect to be found by SAST tools.
+
             cursor.execute(
                 f"""
                 SELECT id, email, username, can_create_user, is_staff, is_active

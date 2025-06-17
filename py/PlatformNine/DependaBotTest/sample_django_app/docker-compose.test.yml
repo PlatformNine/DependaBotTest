@@ -12,9 +12,12 @@ services:
       - MEMCACHE_URL=memcache://memcache:11211
       - TEST_BASE_URL=http://web:8000/api
     depends_on:
-      - web
-      - db
-      - memcache
+      web:
+        condition: service_healthy
+      db:
+        condition: service_started
+      memcache:
+        condition: service_started
     working_dir: /usr/local/yoda/dependabottest/sample_django_app
     command: >
       sh -c "
