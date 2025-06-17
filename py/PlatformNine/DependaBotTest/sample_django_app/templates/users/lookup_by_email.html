@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Details - {{ user.email }}</title>
+    <title>User Details - {{ user.email|escape }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -75,7 +75,7 @@
     <div class="container">
         <h1>User Details</h1>
         <div class="user-email">
-            <strong>Email:</strong> {{ user.email }}
+            <strong>Email:</strong> {{ user.email|escape }}
         </div>
         
         <table>
@@ -97,7 +97,7 @@
                         {% elif field_value == "N/A" %}
                             <span class="na-value">{{ field_value }}</span>
                         {% else %}
-                            {{ field_value }}
+                            {{ field_value|escape }}
                         {% endif %}
                     </td>
                 </tr>
