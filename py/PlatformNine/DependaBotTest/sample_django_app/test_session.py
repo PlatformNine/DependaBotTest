@@ -222,5 +222,96 @@ def test_session_authentication_flow():
     assert response.json()["authenticated"] is False
     logger.info("Step 5: Session cleared confirmed")
 
+def test_lookup_by_email_html_success():
+    """Test that lookup_by_email_html returns proper HTML with user details."""
+    email = "admin@yodaexample.click"
+    url = BASE_URL / "users" / "lookup_by_email_html" / ""
+    params = {"email": email}
+    
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 200, f"HTML lookup failed: {response.text}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check that it's valid HTML
+    assert "<html>" in html_content, "Response should contain HTML structure"
+    assert "<head>" in html_content, "Response should contain head section"
+    assert "<body>" in html_content, "Response should contain body section"
+    assert "<table>" in html_content, "Response should contain table"
+    
+    # Check for user details
+    assert email in html_content, "HTML should contain the user's email"
+    assert "User Details" in html_content, "HTML should contain user details title"
+    
+    # Check for table structure
+    assert "<th>Field Name</th>" in html_content, "HTML should contain field name header"
+    assert "<th>Value</th>" in html_content, "HTML should contain value header"
+    
+    # Check for specific user fields that should be present
+    assert "id" in html_content, "HTML should contain user ID field"
+    assert "username" in html_content, "HTML should contain username field"
+    assert "can_create_user" in html_content, "HTML should contain can_create_user field"
+    assert "is_staff" in html_content, "HTML should contain is_staff field"
+    assert "is_active" in html_content, "HTML should contain is_active field"
+    
+    logger.info("HTML lookup successful - proper HTML structure and user details returned")
+
+def test_lookup_by_email_html_missing_email():
+    """Test that lookup_by_email_html returns error HTML when email is missing."""
+    url = BASE_URL / "users" / "lookup_by_email_html" / ""
+    
+    response = requests.get(str(url))
+    
+    assert response.status_code == 400, f"Missing email should return 400, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check for error message
+    assert "Error" in html_content, "HTML should contain error message"
+    assert "Please provide an email address" in html_content, "HTML should contain email requirement message"
+    assert "Usage:" in html_content, "HTML should contain usage instructions"
+    
+    logger.info("HTML lookup properly handles missing email parameter")
+
+def test_lookup_by_email_html_user_not_found():
+    """Test that lookup_by_email_html returns error HTML when user is not found."""
+    email = "nonexistent@example.com"
+    url = BASE_URL / "users" / "lookup_by_email_html" / ""
+    params = {"email": email}
+    
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 404, f"User not found should return 404, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check for error message
+    assert "User Not Found" in html_content, "HTML should contain user not found message"
+    assert email in html_content, "HTML should contain the requested email"
+    
+    logger.info("HTML lookup properly handles user not found case")
+
+def test_lookup_by_email_html_no_authentication_required():
+    """Test that lookup_by_email_html works without authentication (unlike JSON version)."""
+    email = "admin@yodaexample.click"
+    url = BASE_URL / "users" / "lookup_by_email_html" / ""
+    params = {"email": email}
+    
+    # Should work without any authentication
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 200, f"HTML lookup should work without auth, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    assert "<html>" in html_content, "Response should be valid HTML"
+    assert email in html_content, "HTML should contain the user's email"
+    
+    logger.info("HTML lookup correctly accessible without authentication")
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"]) 

@@ -7,6 +7,7 @@ from django.contrib.auth import login, logout
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from django.http import HttpResponse
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer
 from .pagination import CustomCursorPagination
@@ -32,6 +33,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         if self.action == 'session_status':
             return [permissions.AllowAny()]  # Allow checking session status without auth
+        if self.action == 'lookup_by_email_html':
+            return [permissions.AllowAny()]  # Allow HTML lookup without auth
         return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -143,4 +146,101 @@ class UserViewSet(viewsets.ModelViewSet):
             'is_active': result[5]
         }
 
-        return Response({'user': user_data}) 
+        return Response({'user': user_data})
+
+    @action(detail=False, methods=['get'])
+    def lookup_by_email_html(self, request):
+        email = request.query_params.get('email')
+        
+        if not email:
+            return HttpResponse(
+                """
+                <html>
+                <head><title>User Lookup Error</title></head>
+                <body>
+                    <h1>Error</h1>
+                    <p>Please provide an email address.</p>
+                    <p>Usage: /api/users/lookup_by_email_html/?email=user@example.com</p>
+                </body>
+                </html>
+                """,
+                content_type='text/html',
+                status=400
+            )
+
+        try:
+            user = User.objects.get(email=email)
+            
+            # Get all fields from the user model
+            user_fields = []
+            for field in User._meta.fields:
+                field_name = field.name
+                field_value = getattr(user, field_name)
+                # Convert boolean values to readable text
+                if isinstance(field_value, bool):
+                    field_value = "Yes" if field_value else "No"
+                # Handle None values
+                elif field_value is None:
+                    field_value = "N/A"
+                user_fields.append((field_name, str(field_value)))
+            
+            # Create HTML table
+            html_content = f"""
+            <html>
+            <head>
+                <title>User Details - {user.email}</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    h1 {{ color: #333; }}
+                    table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; font-weight: bold; }}
+                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                    .field-name {{ font-weight: bold; color: #555; }}
+                    .field-value {{ color: #333; }}
+                </style>
+            </head>
+            <body>
+                <h1>User Details</h1>
+                <p><strong>Email:</strong> {user.email}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field Name</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            
+            for field_name, field_value in user_fields:
+                html_content += f"""
+                        <tr>
+                            <td class="field-name">{field_name}</td>
+                            <td class="field-value">{field_value}</td>
+                        </tr>
+                """
+            
+            html_content += """
+                    </tbody>
+                </table>
+            </body>
+            </html>
+            """
+            
+            return HttpResponse(html_content, content_type='text/html')
+            
+        except User.DoesNotExist:
+            return HttpResponse(
+                f"""
+                <html>
+                <head><title>User Not Found</title></head>
+                <body>
+                    <h1>User Not Found</h1>
+                    <p>No user found with email: {email}</p>
+                </body>
+                </html>
+                """,
+                content_type='text/html',
+                status=404
+            ) 
