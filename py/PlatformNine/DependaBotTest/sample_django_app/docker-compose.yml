@@ -17,6 +17,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    stop_grace_period: 0s
+    stop_signal: SIGKILL
 
   db:
     image: postgres:15
@@ -28,10 +30,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    stop_grace_period: 0s
+    stop_signal: SIGKILL
 
   memcache:
     image: memcached:1.6-alpine
     command: memcached -m 128
+    stop_grace_period: 0s
+    stop_signal: SIGKILL
 
 volumes:
   postgres_data: 
