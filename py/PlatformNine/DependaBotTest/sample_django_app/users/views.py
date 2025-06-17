@@ -8,6 +8,8 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from django.http import HttpResponse
+from jinja2 import Environment, FileSystemLoader
+import os
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer
 from .pagination import CustomCursorPagination
@@ -35,6 +37,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]  # Allow checking session status without auth
         if self.action == 'lookup_by_email_html':
             return [permissions.AllowAny()]  # Allow HTML lookup without auth
+        if self.action == 'lookup_by_email_html_jinja':
+            return [permissions.AllowAny()]  # Allow Jinja HTML lookup without auth
         return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -227,6 +231,70 @@ class UserViewSet(viewsets.ModelViewSet):
             </body>
             </html>
             """
+            
+            return HttpResponse(html_content, content_type='text/html')
+            
+        except User.DoesNotExist:
+            return HttpResponse(
+                f"""
+                <html>
+                <head><title>User Not Found</title></head>
+                <body>
+                    <h1>User Not Found</h1>
+                    <p>No user found with email: {email}</p>
+                </body>
+                </html>
+                """,
+                content_type='text/html',
+                status=404
+            )
+
+    @action(detail=False, methods=['get'])
+    def lookup_by_email_html_jinja(self, request):
+        email = request.query_params.get('email')
+        
+        if not email:
+            return HttpResponse(
+                """
+                <html>
+                <head><title>User Lookup Error</title></head>
+                <body>
+                    <h1>Error</h1>
+                    <p>Please provide an email address.</p>
+                    <p>Usage: /api/users/lookup_by_email_html_jinja/?email=user@example.com</p>
+                </body>
+                </html>
+                """,
+                content_type='text/html',
+                status=400
+            )
+
+        try:
+            user = User.objects.get(email=email)
+            
+            # Get all fields from the user model
+            user_fields = []
+            for field in User._meta.fields:
+                field_name = field.name
+                field_value = getattr(user, field_name)
+                # Convert boolean values to readable text
+                if isinstance(field_value, bool):
+                    field_value = "Yes" if field_value else "No"
+                # Handle None values
+                elif field_value is None:
+                    field_value = "N/A"
+                user_fields.append((field_name, str(field_value)))
+            
+            # Set up Jinja2 environment
+            template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
+            env = Environment(loader=FileSystemLoader(template_dir))
+            template = env.get_template('users/lookup_by_email.html')
+            
+            # Render template with context
+            html_content = template.render(
+                user=user,
+                user_fields=user_fields
+            )
             
             return HttpResponse(html_content, content_type='text/html')
             

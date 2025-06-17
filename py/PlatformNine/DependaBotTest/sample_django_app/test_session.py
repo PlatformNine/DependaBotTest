@@ -313,5 +313,137 @@ def test_lookup_by_email_html_no_authentication_required():
     
     logger.info("HTML lookup correctly accessible without authentication")
 
+def test_lookup_by_email_html_jinja_success():
+    """Test that lookup_by_email_html_jinja returns proper HTML with user details using Jinja template."""
+    email = "admin@yodaexample.click"
+    url = BASE_URL / "users" / "lookup_by_email_html_jinja" / ""
+    params = {"email": email}
+    
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 200, f"Jinja HTML lookup failed: {response.text}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check that it's valid HTML with proper structure
+    assert "<!DOCTYPE html>" in html_content, "Response should contain DOCTYPE"
+    assert "<html lang=\"en\">" in html_content, "Response should contain HTML with lang attribute"
+    assert "<head>" in html_content, "Response should contain head section"
+    assert "<body>" in html_content, "Response should contain body section"
+    assert "<table>" in html_content, "Response should contain table"
+    
+    # Check for Jinja template specific elements
+    assert "container" in html_content, "HTML should contain container class from template"
+    assert "user-email" in html_content, "HTML should contain user-email class from template"
+    assert "boolean-yes" in html_content or "boolean-no" in html_content, "HTML should contain boolean styling classes"
+    
+    # Check for user details
+    assert email in html_content, "HTML should contain the user's email"
+    assert "User Details" in html_content, "HTML should contain user details title"
+    
+    # Check for table structure
+    assert "<th>Field Name</th>" in html_content, "HTML should contain field name header"
+    assert "<th>Value</th>" in html_content, "HTML should contain value header"
+    
+    # Check for specific user fields that should be present
+    assert "id" in html_content, "HTML should contain user ID field"
+    assert "username" in html_content, "HTML should contain username field"
+    assert "can_create_user" in html_content, "HTML should contain can_create_user field"
+    assert "is_staff" in html_content, "HTML should contain is_staff field"
+    assert "is_active" in html_content, "HTML should contain is_active field"
+    
+    # Check for enhanced styling from Jinja template
+    assert "background-color: #f5f5f5" in html_content, "HTML should contain template styling"
+    assert "box-shadow" in html_content, "HTML should contain enhanced CSS styling"
+    
+    logger.info("Jinja HTML lookup successful - proper template rendering and enhanced styling")
+
+def test_lookup_by_email_html_jinja_missing_email():
+    """Test that lookup_by_email_html_jinja returns error HTML when email is missing."""
+    url = BASE_URL / "users" / "lookup_by_email_html_jinja" / ""
+    
+    response = requests.get(str(url))
+    
+    assert response.status_code == 400, f"Missing email should return 400, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check for error message
+    assert "Error" in html_content, "HTML should contain error message"
+    assert "Please provide an email address" in html_content, "HTML should contain email requirement message"
+    assert "lookup_by_email_html_jinja" in html_content, "HTML should contain correct endpoint in usage instructions"
+    
+    logger.info("Jinja HTML lookup properly handles missing email parameter")
+
+def test_lookup_by_email_html_jinja_user_not_found():
+    """Test that lookup_by_email_html_jinja returns error HTML when user is not found."""
+    email = "nonexistent@example.com"
+    url = BASE_URL / "users" / "lookup_by_email_html_jinja" / ""
+    params = {"email": email}
+    
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 404, f"User not found should return 404, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    
+    # Check for error message
+    assert "User Not Found" in html_content, "HTML should contain user not found message"
+    assert email in html_content, "HTML should contain the requested email"
+    
+    logger.info("Jinja HTML lookup properly handles user not found case")
+
+def test_lookup_by_email_html_jinja_no_authentication_required():
+    """Test that lookup_by_email_html_jinja works without authentication."""
+    email = "admin@yodaexample.click"
+    url = BASE_URL / "users" / "lookup_by_email_html_jinja" / ""
+    params = {"email": email}
+    
+    # Should work without any authentication
+    response = requests.get(str(url), params=params)
+    
+    assert response.status_code == 200, f"Jinja HTML lookup should work without auth, got {response.status_code}"
+    assert response.headers['content-type'] == 'text/html', "Response should be HTML"
+    
+    html_content = response.text
+    assert "<!DOCTYPE html>" in html_content, "Response should be valid HTML with DOCTYPE"
+    assert email in html_content, "HTML should contain the user's email"
+    
+    logger.info("Jinja HTML lookup correctly accessible without authentication")
+
+def test_lookup_by_email_html_vs_jinja_comparison():
+    """Test that both HTML routes work and return similar content but with different styling."""
+    email = "admin@yodaexample.click"
+    
+    # Test regular HTML route
+    url_regular = BASE_URL / "users" / "lookup_by_email_html" / ""
+    response_regular = requests.get(str(url_regular), params={"email": email})
+    assert response_regular.status_code == 200
+    
+    # Test Jinja HTML route
+    url_jinja = BASE_URL / "users" / "lookup_by_email_html_jinja" / ""
+    response_jinja = requests.get(str(url_jinja), params={"email": email})
+    assert response_jinja.status_code == 200
+    
+    # Both should contain the same user data
+    assert email in response_regular.text, "Regular HTML should contain email"
+    assert email in response_jinja.text, "Jinja HTML should contain email"
+    
+    # Both should contain table structure
+    assert "<table>" in response_regular.text, "Regular HTML should contain table"
+    assert "<table>" in response_jinja.text, "Jinja HTML should contain table"
+    
+    # Jinja version should have enhanced styling
+    assert "container" in response_jinja.text, "Jinja HTML should have container class"
+    assert "box-shadow" in response_jinja.text, "Jinja HTML should have enhanced CSS"
+    
+    # Regular version should have simpler styling
+    assert "font-family: Arial" in response_regular.text, "Regular HTML should have basic styling"
+    
+    logger.info("Both HTML routes work correctly with appropriate styling differences")
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"]) 
