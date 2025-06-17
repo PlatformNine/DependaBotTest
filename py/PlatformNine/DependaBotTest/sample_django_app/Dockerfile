@@ -20,7 +20,7 @@ RUN uv sync
 # Copy the rest of the application
 COPY core/ /usr/local/yoda/dependabottest/sample_django_app/core/
 COPY users/ /usr/local/yoda/dependabottest/sample_django_app/users/
-COPY start.sh manage.py /usr/local/yoda/dependabottest/sample_django_app/
+COPY start.sh manage.py gunicorn.conf.py /usr/local/yoda/dependabottest/sample_django_app/
 
 # Run the start script
 CMD ["./start.sh"] 

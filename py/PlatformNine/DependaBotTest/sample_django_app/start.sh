@@ -11,6 +11,6 @@ echo "Database is ready!"
 echo "Running migrations..."
 uv run python manage.py migrate
 
-# Start the Django development server
-echo "Starting Django development server..."
-uv run python manage.py runserver 0.0.0.0:8000 
+# Start the Django application with Gunicorn
+echo "Starting Django application with Gunicorn..."
+uv run gunicorn core.wsgi:application -c gunicorn.conf.py 

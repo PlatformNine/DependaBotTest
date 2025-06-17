@@ -9,6 +9,7 @@ A Django application with user management features including authentication, aut
 - Paginated user listing with cursor-based pagination
 - PostgreSQL database
 - Docker and docker-compose setup
+- Production-ready with Gunicorn WSGI server
 
 ## Setup
 
@@ -51,4 +52,5 @@ The application uses:
 - Django REST Framework
 - PostgreSQL
 - bcrypt for password hashing
-- uv for dependency management 
+- uv for dependency management
+- Gunicorn for production deployment
